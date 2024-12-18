@@ -17,6 +17,7 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.List;
 
@@ -35,9 +36,12 @@ public class SizoParser {
 
     public SizoParser(TelegramParserBot telegramParserBot) {
         this.telegramParserBot = telegramParserBot;
-        System.setProperty("webdriver.chrome.driver", "chromeDriver/chromedriver.exe");
+        String jarDir = new File(SizoParser.class.getProtectionDomain().getCodeSource().getLocation().getPath())
+                .getParent();
+        String driverPath = jarDir + File.separator + "chromedriver";
+        System.setProperty("webdriver.chrome.driver", driverPath);
         ChromeOptions options = new ChromeOptions();
-//        options.addArguments("--headless");
+        options.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
         this.driver = new ChromeDriver(options);
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
