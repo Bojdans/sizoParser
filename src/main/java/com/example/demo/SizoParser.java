@@ -2,6 +2,7 @@ package com.example.demo;
 
 import jakarta.annotation.PreDestroy;
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -46,43 +47,64 @@ public class SizoParser {
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
     }
 
-    @Async
-    @Scheduled(fixedRate = 500)
+    @Scheduled(fixedRate = 300)
     public void sendRequestParser() throws InterruptedException {
+        // Проверка включения парсера и того, что окно ещё не отловлено
         if (turnedOn && !freeOrdered) {
-//                driver.get("https://f-okno.ru/base/moscow/kp24olenegorsk?order_type=1");
+            // Открываем страницу
             driver.get("https://f-okno.ru/base/moscow/medved?order_type=1");
-            if (driver.getCurrentUrl().contains("login")) {
+
+            // Проверка, что пользователь залогинен через наличие элемента clientzone_name
+            try {
+                wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id='clientzone_name']")));
+            } catch (TimeoutException e) {
+                // Если пользователь не залогинен, обновляем логин и пробуем заново
                 updateLogin();
+                Thread.sleep(300); // Ждём некоторое время, чтобы данные обновились
+                System.out.println("Пользователь не залогинен. Выполняется вход...");
+                return; // Завершаем выполнение метода, чтобы не продолжать парсинг
             }
+
             boolean isFreeWindowFound = false;
 
-            // Цикл поиска окна
+            // Цикл поиска свободного окна
             while (!isFreeWindowFound && turnedOn) {
                 List<WebElement> freeDateElements = driver.findElements(By.className("free"));
+
                 if (!freeDateElements.isEmpty()) {
                     try {
                         isFreeWindowFound = true; // Найдено свободное окно
-                        WebElement freeDate = freeDateElements.get(0); // Получаем первый элемент из списка
+
+                        // Получаем последний доступный элемент со свободной датой
+                        WebElement freeDate = freeDateElements.get(freeDateElements.size() - 1);
                         orderDate = freeDate.getText().replace("\n", " ").trim().replace("Есть места", "");
                         Thread.sleep(100);
+
+                        // Кликаем по найденному элементу
                         freeDate.click();
+
+                        // Выбор времени через выпадающий список
                         Select select = new Select(driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/p[1]/select")));
-                        orderTime = select.getAllSelectedOptions().get(0).getText();
+                        orderTime = select.getFirstSelectedOption().getText();
                         select.selectByIndex(0);
 
+                        // Кликаем по чекбоксу
                         WebElement checkbox = driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/div[1]/div/input"));
                         checkbox.click();
 
+                        // Кнопка подтверждения
                         WebElement submitButton = driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/div[2]/a"));
-                        submitButton.click();
-                        freeOrdered = true;
+                         submitButton.click(); // Раскомментируйте для реального подтверждения
+                        System.out.println("окно отловлено");
+                        freeOrdered = true; // Отмечаем, что свободное окно отловлено
                     } finally {
+                        // Отправляем сообщение через Telegram бота
                         telegramParserBot.sendMessage(telegramParserBot.admin, "Окно отловлено\nДата: " + orderDate + "\nВремя: " + orderTime);
-                        turnedOn = false;
+                        turnedOn = false; // Выключаем парсер после успешной обработки
                     }
                 } else {
-                    Thread.sleep(500);
+                    // Если свободных окон нет, обновляем страницу
+
                     driver.get("https://f-okno.ru/base/moscow/medved?order_type=1");
                 }
             }
