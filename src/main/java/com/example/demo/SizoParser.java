@@ -1,10 +1,7 @@
 package com.example.demo;
 
 import jakarta.annotation.PreDestroy;
-import org.openqa.selenium.By;
-import org.openqa.selenium.TimeoutException;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -19,7 +16,13 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
@@ -34,8 +37,9 @@ public class SizoParser {
     public static String orderTime = "";
     public static boolean turnedOn = false;
     public static boolean freeOrdered = false;
+    public static LocalDate targetDate = LocalDate.of(2025, 1, 11); // Начальная дата
 
-    public SizoParser(TelegramParserBot telegramParserBot) {
+    public SizoParser(TelegramParserBot telegramParserBot) throws IOException {
         this.telegramParserBot = telegramParserBot;
         String jarDir = new File(SizoParser.class.getProtectionDomain().getCodeSource().getLocation().getPath())
                 .getParent();
@@ -43,70 +47,63 @@ public class SizoParser {
         System.setProperty("webdriver.chrome.driver", driverPath);
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
-        this.driver = new ChromeDriver(options);
+
+        this.driver = new ChromeDriver();
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        TelegramParserBot.admin = Files.readAllLines(Paths.get(jarDir + File.separator + "admins.txt")).get(0);
     }
 
-    @Scheduled(fixedRate = 300)
+    @Scheduled(fixedRate = 90)
     public void sendRequestParser() throws InterruptedException {
         // Проверка включения парсера и того, что окно ещё не отловлено
         if (turnedOn && !freeOrdered) {
-            // Открываем страницу
-            driver.get("https://f-okno.ru/base/moscow/medved?order_type=1");
+            // Формируем дату для запроса
+            if (orderDate != null && !orderDate.isEmpty()) {
+                try {
+                    targetDate = LocalDate.parse(orderDate); // Парсим текущую дату, если есть
+                } catch (DateTimeParseException e) {
+                }
+            }
 
-            // Проверка, что пользователь залогинен через наличие элемента clientzone_name
+            String targetDateStr = targetDate.toString();
+
             try {
                 wait.until(ExpectedConditions.visibilityOfElementLocated(By.xpath("//*[@id='clientzone_name']")));
             } catch (TimeoutException e) {
-                // Если пользователь не залогинен, обновляем логин и пробуем заново
                 updateLogin();
-                Thread.sleep(300); // Ждём некоторое время, чтобы данные обновились
-                System.out.println("Пользователь не залогинен. Выполняется вход...");
-                return; // Завершаем выполнение метода, чтобы не продолжать парсинг
+                System.out.println("Вход!");
+                return;
             }
+            String url = "https://f-okno.ru/base/moscow/medved?sub=order&date=" + targetDateStr + "&t=10";
 
-            boolean isFreeWindowFound = false;
-
-            // Цикл поиска свободного окна
-            while (!isFreeWindowFound && turnedOn) {
-                List<WebElement> freeDateElements = driver.findElements(By.className("free"));
-
-                if (!freeDateElements.isEmpty()) {
+            try {
+                driver.get(url);
+                Select select = new Select(driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/p[1]/select")));
+                if (!select.getOptions().isEmpty()) {
                     try {
-                        isFreeWindowFound = true; // Найдено свободное окно
+                        orderDate = targetDateStr;
 
-                        // Получаем последний доступный элемент со свободной датой
-                        WebElement freeDate = freeDateElements.get(freeDateElements.size() - 1);
-                        orderDate = freeDate.getText().replace("\n", " ").trim().replace("Есть места", "");
-                        Thread.sleep(100);
-
-                        // Кликаем по найденному элементу
-                        freeDate.click();
-
-                        // Выбор времени через выпадающий список
-                        Select select = new Select(driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/p[1]/select")));
+                        select = new Select(driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/p[1]/select")));
                         orderTime = select.getFirstSelectedOption().getText();
+
                         select.selectByIndex(0);
 
-                        // Кликаем по чекбоксу
                         WebElement checkbox = driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/div[1]/div/input"));
                         checkbox.click();
 
-                        // Кнопка подтверждения
                         WebElement submitButton = driver.findElement(By.xpath("/html/body/div[1]/div[2]/div[1]/form/div[2]/a"));
-                         submitButton.click(); // Раскомментируйте для реального подтверждения
-                        System.out.println("окно отловлено");
-                        freeOrdered = true; // Отмечаем, что свободное окно отловлено
-                    } finally {
-                        // Отправляем сообщение через Telegram бота
-                        telegramParserBot.sendMessage(telegramParserBot.admin, "Окно отловлено\nДата: " + orderDate + "\nВремя: " + orderTime);
-                        turnedOn = false; // Выключаем парсер после успешной обработки
-                    }
-                } else {
-                    // Если свободных окон нет, обновляем страницу
+                        submitButton.click();
 
-                    driver.get("https://f-okno.ru/base/moscow/medved?order_type=1");
+                        freeOrdered = true;
+
+                    } finally {
+                        telegramParserBot.sendMessage(telegramParserBot.admin, "Окно отловлено\nДата: " + orderDate + "\nВремя: " + orderTime);
+                        turnedOn = false;
+                    }
                 }
+            } catch (NoSuchElementException e) {
+
             }
         }
     }
