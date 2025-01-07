@@ -98,7 +98,11 @@ public class TelegramParserBot extends TelegramLongPollingBot {
                     sendMessage(chatId, "Админ: " + admin + "(вы)");
                     break;
                 case "Изменить дату":
-                    requestDateInput(Long.parseLong(chatId));
+                    if (chatId.equals(admin)) {
+                        requestDateInput(Long.parseLong(chatId));
+                    } else {
+                        sendMessage(chatId, "вы не администратор!");
+                    }
                     break;
                 default:
                     if (waitingForDate.get(Long.parseLong(chatId))) {

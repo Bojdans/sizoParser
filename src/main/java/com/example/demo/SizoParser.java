@@ -47,13 +47,15 @@ public class SizoParser {
         System.setProperty("webdriver.chrome.driver", driverPath);
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
-
-        this.driver = new ChromeDriver();
+        this.driver = new ChromeDriver(options);
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        try {
+            TelegramParserBot.admin = Files.readAllLines(Paths.get(jarDir + File.separator + "admins.txt")).get(0);
+        }
+        catch (Exception e) {
+        }
 
-        TelegramParserBot.admin = Files.readAllLines(Paths.get(jarDir + File.separator + "admins.txt")).get(0);
     }
-
     @Scheduled(fixedRate = 90)
     public void sendRequestParser() throws InterruptedException {
         // Проверка включения парсера и того, что окно ещё не отловлено
@@ -135,7 +137,7 @@ public class SizoParser {
         driver.quit();
     }
 
-    @Bean
+    @Scheduled(fixedRate = 300000)
     public String setBot() {
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
