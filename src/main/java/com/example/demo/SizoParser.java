@@ -75,6 +75,7 @@ public class SizoParser {
             } catch (TimeoutException e) {
                 updateLogin();
                 System.out.println("Вход!");
+                System.out.println();
                 return;
             }
             String url = "https://f-okno.ru/base/moscow/medved?sub=order&date=" + targetDateStr + "&t=10";
