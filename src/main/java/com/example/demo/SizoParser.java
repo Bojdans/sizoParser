@@ -37,7 +37,7 @@ public class SizoParser {
     public static String orderTime = "";
     public static boolean turnedOn = false;
     public static boolean freeOrdered = false;
-    public static LocalDate targetDate = LocalDate.of(2025, 1, 11); // Начальная дата
+    public static LocalDate targetDate = LocalDate.of(2025, 1, 11); 
 
     public SizoParser(TelegramParserBot telegramParserBot) throws IOException {
         this.telegramParserBot = telegramParserBot;
@@ -58,12 +58,12 @@ public class SizoParser {
     }
     @Scheduled(fixedRate = 90)
     public void sendRequestParser() throws InterruptedException {
-        // Проверка включения парсера и того, что окно ещё не отловлено
+        
         if (turnedOn && !freeOrdered) {
-            // Формируем дату для запроса
+            
             if (orderDate != null && !orderDate.isEmpty()) {
                 try {
-                    targetDate = LocalDate.parse(orderDate); // Парсим текущую дату, если есть
+                    targetDate = LocalDate.parse(orderDate); 
                 } catch (DateTimeParseException e) {
                 }
             }
@@ -111,7 +111,7 @@ public class SizoParser {
     }
 
     @Async
-    @Scheduled(fixedRate = 300000) // Вход каждые 5 минут
+    @Scheduled(fixedRate = 300000) 
     public void updateLogin() {
         try {
             this.signedIn = false;
